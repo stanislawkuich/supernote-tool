@@ -307,7 +307,7 @@ class PdfConverter:
         self.palette = palette
         self.pagesize = A4
 
-    def convert(self, page_number, vectorize=False, enable_link=False):
+    def convert(self, page_number, vectorize=False, enable_link=False, enable_keyword=False):
         """Returns PDF data of the given page.
 
         Parameters
@@ -318,6 +318,8 @@ class PdfConverter:
             convert handwriting to vector
         enable_link : bool
             enable page links and web links
+        enable_keyword : bool
+            enable page link where keyword has been identified
 
         Returns
         -------
@@ -332,7 +334,7 @@ class PdfConverter:
             renderer_class = PdfConverter.ImgPageRenderer
         imglist = self._create_image_list(converter, page_number)
         pdf_data = BytesIO()
-        self._create_pdf(pdf_data, imglist, renderer_class, enable_link)
+        self._create_pdf(pdf_data, imglist, renderer_class, enable_link, enable_keyword)
         return pdf_data.getvalue()
 
     def _create_image_list(self, converter, page_number):
@@ -348,21 +350,43 @@ class PdfConverter:
             imglist.append(img)
         return imglist
 
-    def _create_pdf(self, buf, imglist, renderer_class, enable_link):
+    def _create_pdf(self, buf, imglist, renderer_class, enable_link, enable_keyword):
         c = canvas.Canvas(buf, pagesize=self.pagesize)
+        keywords = self.note.get_keywords()
         for n, img in enumerate(imglist):
+            print('Page: '+str(n))
             page = self.note.get_page(n)
+            pageid = page.get_pageid()
             horizontal = page.get_orientation() == fileformat.Page.ORIENTATION_HORIZONTAL
             pagesize = landscape(self.pagesize) if horizontal else portrait(self.pagesize)
             c.setPageSize(pagesize)
             renderer = renderer_class(img, pagesize)
             renderer.draw(c)
+            if enable_keyword:
+                found = []
+                for keyword in keywords:
+                    if keyword.get_page_number() == n:
+                        found.append(keyword)
+                for i in found:
+                    try:
+                        print('Added Keyword: '+i.get_keyword()+' Keyword Page: '+str(i.get_page_number()))
+                        c.bookmarkPage(pageid)
+                        scaled_rect = self._calc_link_rect(i.get_rect(), renderer.get_scale())
+                        #c.linkAbsolute(i.get_keyword(), pageid, scaled_rect)
+                        #c.addOutlineEntry(i.get_keyword(),pageid,0,0)
+                        c.textAnnotation(i.get_keyword(),scaled_rect)
+                    except:
+                        continue
             if enable_link:
                 pageid = page.get_pageid()
                 if pageid is not None:
                     c.bookmarkPage(pageid)
                     self._add_links(c, n, renderer.get_scale())
             c.showPage()
+            #c.showOutline()
+        c.setTitle('Notes')
+        c.setSubject('Notes')
+        c.setAuthor('Author')
         c.save()
 
     def _add_links(self, cvs, page_number, scale):
@@ -449,3 +473,4 @@ class TextConverter:
         if text_list is None:
             return None
         return ' '.join(text_list)
+    

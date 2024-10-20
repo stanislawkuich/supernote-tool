@@ -34,6 +34,7 @@ from . import decoder as Decoder
 from . import exceptions
 from . import fileformat
 from . import utils
+from collections import defaultdict
 
 
 class VisibilityOverlay(Enum):
@@ -353,8 +354,9 @@ class PdfConverter:
     def _create_pdf(self, buf, imglist, renderer_class, enable_link, enable_keyword):
         c = canvas.Canvas(buf, pagesize=self.pagesize)
         keywords = self.note.get_keywords()
+        index = defaultdict(list)
         for n, img in enumerate(imglist):
-            print('Page: '+str(n))
+            #print('Page: '+str(n))
             page = self.note.get_page(n)
             pageid = page.get_pageid()
             horizontal = page.get_orientation() == fileformat.Page.ORIENTATION_HORIZONTAL
@@ -369,7 +371,8 @@ class PdfConverter:
                         found.append(keyword)
                 for i in found:
                     try:
-                        print('Added Keyword: '+i.get_keyword()+' Keyword Page: '+str(i.get_page_number()))
+                        index[str.upper(i.get_keyword())].append(str(int(i.get_page_number())+1))
+                        #print(i.get_keyword()+' Page: '+str(i.get_page_number()))
                         c.bookmarkPage(pageid)
                         scaled_rect = self._calc_link_rect(i.get_rect(), renderer.get_scale())
                         #c.linkAbsolute(i.get_keyword(), pageid, scaled_rect)
@@ -384,6 +387,13 @@ class PdfConverter:
                     self._add_links(c, n, renderer.get_scale())
             c.showPage()
             #c.showOutline()
+        res = defaultdict(list)
+        for keyword,value in index.items():
+            res[keyword].append(value)
+        print('Final Output\n')
+        sortedDict = dict( sorted(res.items(), key=lambda x: x[0].lower()) )
+        for x,y in sortedDict.items():
+            print(x,y)
         c.setTitle('Notes')
         c.setSubject('Notes')
         c.setAuthor('Author')
